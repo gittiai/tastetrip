@@ -1,69 +1,124 @@
-import Image from "next/image";
+"use client";
+
+import { useChat } from "@ai-sdk/react";
+import { useEffect, useRef, useState } from "react";
+import type { TasteTripMessage } from "@/agent/tastetrip";
+import { CityPlan, Destinations, Group, TasteChips, Thinking, Trips } from "@/components/cards";
+
+const STARTERS = [
+  "I love Khruangbin, Past Lives and Anthony Bourdain's Parts Unknown. Flying from Delhi, long weekend in December.",
+  "Phoebe Bridgers, Wes Anderson films and specialty coffee. Somewhere in Asia, from Mumbai.",
+  "Me: Radiohead, Succession, natural wine. My friend Sam: Taylor Swift, Friends, Disney. Where should we go together from London?",
+  "Bad Bunny, Bridgerton and street tacos. From New York in March.",
+];
+
+const LOADING: Record<string, string> = {
+  "tool-resolveTaste": "Finding your favorites in Qloo's taste graph…",
+  "tool-findDestinations": "Ranking destinations worldwide by taste…",
+  "tool-priceTrips": "Searching live fares…",
+  "tool-planCity": "Picking places you'll love…",
+  "tool-blendGroup": "Scoring cities against everyone's taste…",
+};
 
 export default function Home() {
+  const [input, setInput] = useState("");
+  const { messages, sendMessage, status, error } = useChat<TasteTripMessage>();
+  const busy = status === "submitted" || status === "streaming";
+  const bottom = useRef<HTMLDivElement>(null);
+
+  useEffect(() => bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" }), [messages, status]);
+
+  const send = (text: string) => {
+    if (!text.trim() || busy) return;
+    sendMessage({ text });
+    setInput("");
+  };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="mx-auto flex min-h-dvh max-w-3xl flex-col px-4">
+      <header className="flex items-center justify-between py-5">
+        <div className="font-display text-xl font-semibold">
+          Taste<span className="text-accent">Trip</span>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+        <span className="text-xs text-muted">powered by Qloo Taste AI</span>
+      </header>
+
+      <main className="flex-1 space-y-6 pb-40">
+        {messages.length === 0 && (
+          <section className="pt-10 sm:pt-16">
+            <h1 className="font-display text-4xl leading-tight font-semibold sm:text-5xl">
+              Go where your <span className="text-accent italic">taste</span> lives.
+            </h1>
+            <p className="mt-4 max-w-xl text-muted">
+              Tell me the music, films and food you love. I&apos;ll find the places in the world that match you, not everyone, using
+              Qloo&apos;s taste graph, then find the cheapest flight there.
+            </p>
+            <div className="mt-8 grid gap-2 sm:grid-cols-2">
+              {STARTERS.map((s) => (
+                <button key={s} onClick={() => send(s)} className="rounded-2xl border border-line bg-card p-4 text-left text-sm hover:border-accent">
+                  {s}
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {messages.map((m) =>
+          m.role === "user" ? (
+            <div key={m.id} className="flex justify-end">
+              <div className="max-w-[85%] rounded-2xl bg-ink px-4 py-2.5 text-sm text-bg">
+                {m.parts.map((p, i) => (p.type === "text" ? <span key={i}>{p.text}</span> : null))}
+              </div>
+            </div>
+          ) : (
+            <div key={m.id} className="space-y-4">
+              {m.parts.map((p, i) => {
+                const key = `${m.id}-${i}`;
+                if (p.type === "text") return p.text.trim() ? <p key={key} className="leading-relaxed whitespace-pre-wrap">{p.text}</p> : null;
+                if (!p.type.startsWith("tool-")) return null;
+                if (!("state" in p)) return null;
+                if (p.state === "output-error") return <p key={key} className="text-sm text-accent">Something went wrong: {p.errorText}</p>;
+                if (p.state !== "output-available") return <Thinking key={key} label={LOADING[p.type] ?? "Working…"} />;
+                switch (p.type) {
+                  case "tool-resolveTaste":
+                    return <TasteChips key={key} data={p.output} />;
+                  case "tool-findDestinations":
+                    return <Destinations key={key} data={p.output} onPick={send} />;
+                  case "tool-priceTrips":
+                    return <Trips key={key} data={p.output} onPick={send} />;
+                  case "tool-planCity":
+                    return <CityPlan key={key} data={p.output} />;
+                  case "tool-blendGroup":
+                    return <Group key={key} data={p.output} />;
+                }
+              })}
+            </div>
+          ),
+        )}
+        {status === "submitted" && <Thinking label="Thinking…" />}
+        {error && <p className="text-sm text-accent">Error: {error.message}</p>}
+        <div ref={bottom} />
       </main>
+
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          send(input);
+        }}
+        className="fixed inset-x-0 bottom-0 bg-gradient-to-t from-bg via-bg to-transparent px-4 pt-8 pb-5"
+      >
+        <div className="mx-auto flex max-w-3xl gap-2 rounded-2xl border border-line bg-card p-2 shadow-lg">
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Your favorite artists, films, food… and where you fly from"
+            className="flex-1 bg-transparent px-2 text-sm outline-none placeholder:text-muted"
+          />
+          <button disabled={busy || !input.trim()} className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white disabled:opacity-40">
+            {busy ? "…" : "Go"}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

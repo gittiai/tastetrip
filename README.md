@@ -1,36 +1,51 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TasteTrip
 
-## Getting Started
+**Go where your taste lives.** TasteTrip is an AI travel agent that picks destinations from what you love (your music, films, shows and food), then finds the cheapest flight there.
 
-First, run the development server:
+Google Flights Explore sorts the world by price. Ask a plain LLM where to travel and everyone gets Paris, Tokyo and Lisbon. TasteTrip sorts the world by *your* taste, using [Qloo's Taste AI](https://www.qloo.com/) graph, and then prices it.
+
+## What it does
+
+Type something like *"I love Khruangbin, Past Lives and Anthony Bourdain's Parts Unknown. Flying from Delhi in December."* The agent:
+
+1. **Resolves your taste.** It finds each favorite in Qloo's graph of 250M+ entities.
+2. **Ranks destinations worldwide.** It queries Qloo's insights for `urn:entity:destination` in six world regions, merges them, and drops near-duplicates such as neighborhoods of the same city. Each card shows the Qloo affinity score and **which of your favorites drove the match** (Qloo explainability).
+3. **Prices the trip.** It maps each destination to its best airport and pulls the **live cheapest fare** from Google Flights, with Google's typical price range. It then ranks by taste-per-price to call out the best value.
+4. **Plans the city.** For the destination you pick, it asks Qloo for taste-matched venues within 10 km: where to eat, get coffee, drink, hear music, see and stay.
+5. **Blends a group.** For friends with different tastes, it scores the same candidate cities against each person separately (`filter.results.entities`) and favors places nobody dislikes.
+
+The agent never invents a destination, venue, score or price. Everything on screen comes from a tool call.
+
+## Why it needs Qloo
+
+Without Qloo this is a generic chatbot that suggests the same famous cities to everyone. Qloo provides the parts an LLM cannot reliably produce:
+
+- cross-domain affinity (music + film + TV → places)
+- the explanation of *why* a place matches
+- per-person scoring of the same options, which makes group trips fair
+
+## Stack
+
+- Next.js 16 (App Router) + Tailwind
+- Vercel AI SDK 7 `ToolLoopAgent` with five tools: `resolveTaste`, `findDestinations`, `priceTrips`, `planCity`, `blendGroup`
+- Qloo Taste AI hackathon API
+- SerpAPI Google Flights for live fares
+- OurAirports (public domain) for destination → airport mapping
+
+## Run locally
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
+cp .env.example .env.local   # add your keys
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Deploy
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Deploy to Vercel and set `QLOO_API_KEY` and `SERPAPI_KEY`. On Vercel, the AI Gateway authenticates through OIDC, so no model key is needed.
 
-## Learn More
+## License
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+MIT
