@@ -21,6 +21,7 @@ export type Destination = {
   name: string;
   region: string;
   country?: string;
+  area?: string; // state / province, e.g. Maine
   lat: number;
   lon: number;
   match: number; // Qloo affinity, 0-100
@@ -50,6 +51,7 @@ function toDestination(e: QlooEntity, region: string, names: Map<string, string>
     name: e.name,
     region,
     country: g?.country_code,
+    area: g?.admin1_region,
     lat: e.location.lat,
     lon: e.location.lon,
     match: Math.round((e.query?.affinity ?? 0) * 100),
@@ -125,15 +127,15 @@ export async function planCity(dest: { name: string; lat: number; lon: number },
     "filter.location": `POINT(${dest.lon} ${dest.lat})`,
     "filter.location.radius": radiusKm * 1000,
     "feature.explainability": true,
-    take: 4,
+    take: 8,
   };
-  const sections = await Promise.all(
+  const fetched = await Promise.all(
     categories.map(async (c) => {
       const ents = await insights({ ...base, "filter.tags": CATEGORIES[c].tags.join(",") }).catch(() => []);
       return {
         category: c,
         label: CATEGORIES[c].label,
-        places: ents.slice(0, 3).map((e) => ({
+        places: ents.map((e) => ({
           id: e.entity_id,
           name: e.name,
           match: Math.round((e.query?.affinity ?? 0) * 100),
@@ -150,8 +152,21 @@ export async function planCity(dest: { name: string; lat: number; lon: number },
       };
     }),
   );
-  return sections.filter((s) => s.places.length);
+  // A record store that is also a bar and a cafe would fill three sections. Show each place once,
+  // letting the more specific categories claim it first.
+  const used = new Set<string>();
+  const claimed = new Map<Category, typeof fetched[number]["places"]>();
+  for (const c of CLAIM_ORDER) {
+    const section = fetched.find((s) => s.category === c);
+    if (!section) continue;
+    const picks = section.places.filter((p) => !used.has(p.id)).slice(0, 3);
+    picks.forEach((p) => used.add(p.id));
+    claimed.set(c, picks);
+  }
+  return fetched.map((s) => ({ ...s, places: claimed.get(s.category) ?? [] })).filter((s) => s.places.length);
 }
+
+const CLAIM_ORDER: Category[] = ["music", "stay", "see", "eat", "coffee", "drink"];
 
 /** Candidates from everyone's combined taste, then each person scores the same set, so the group sees who loves what. */
 export async function blendGroup(people: { name: string; taste: TasteItem[] }[], regions: Region[], count: number) {

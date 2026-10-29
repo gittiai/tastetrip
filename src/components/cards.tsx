@@ -58,10 +58,10 @@ export function Thinking({ label }: { label: string }) {
   );
 }
 
-export function TasteChips({ data }: { data: Output<"resolveTaste"> }) {
+export function TasteChips({ items }: { items: Output<"findDestinations">["taste"] }) {
   return (
     <div className="flex flex-wrap gap-2">
-      {data.items.map((t) => (
+      {items.map((t) => (
         <div
           key={t.query}
           className={`flex items-center gap-2 rounded-full border border-line py-1 pr-3 pl-1 text-sm ${t.id ? "bg-card" : "opacity-50"}`}
@@ -90,7 +90,7 @@ export function Destinations({ data, onPick }: { data: Output<"findDestinations"
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="text-xs text-muted">
-                {flag(d.country)} {d.region.replace("_", " ")}
+                {flag(d.country)} {d.area ?? d.region.replace("_", " ")}
               </div>
               <h3 className="font-display text-xl font-semibold">{d.name}</h3>
             </div>
@@ -133,7 +133,7 @@ export function Trips({ data, onPick }: { data: Output<"priceTrips">; onPick: (q
         {data.trips.map((t) => {
           const f = t.fare;
           return (
-            <li key={t.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
+            <li key={t.name} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="font-medium">{t.name}</span>

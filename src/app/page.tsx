@@ -6,15 +6,14 @@ import type { TasteTripMessage } from "@/agent/tastetrip";
 import { CityPlan, Destinations, Group, TasteChips, Thinking, Trips } from "@/components/cards";
 
 const STARTERS = [
-  "I love Khruangbin, Past Lives and Anthony Bourdain's Parts Unknown. Flying from Delhi, long weekend in December.",
-  "Phoebe Bridgers, Wes Anderson films and specialty coffee. Somewhere in Asia, from Mumbai.",
-  "Me: Radiohead, Succession, natural wine. My friend Sam: Taylor Swift, Friends, Disney. Where should we go together from London?",
-  "Bad Bunny, Bridgerton and street tacos. From New York in March.",
+  "I love Khruangbin, Past Lives and Anthony Bourdain's Parts Unknown. Flying from New York, a week in December.",
+  "Phoebe Bridgers, Wes Anderson films and specialty coffee. Long weekend from San Francisco.",
+  "Me: Radiohead, Succession, natural wine. My friend Sam: Taylor Swift, Friends, Disney. Where should we go together from Chicago?",
+  "Bad Bunny, Bridgerton and street tacos. From Miami in March.",
 ];
 
 const LOADING: Record<string, string> = {
-  "tool-resolveTaste": "Finding your favorites in Qloo's taste graph…",
-  "tool-findDestinations": "Ranking destinations worldwide by taste…",
+  "tool-findDestinations": "Reading your taste in Qloo's graph, ranking the world, checking fares…",
   "tool-priceTrips": "Searching live fares…",
   "tool-planCity": "Picking places you'll love…",
   "tool-blendGroup": "Scoring cities against everyone's taste…",
@@ -80,10 +79,14 @@ export default function Home() {
                 if (p.state === "output-error") return <p key={key} className="text-sm text-accent">Something went wrong: {p.errorText}</p>;
                 if (p.state !== "output-available") return <Thinking key={key} label={LOADING[p.type] ?? "Working…"} />;
                 switch (p.type) {
-                  case "tool-resolveTaste":
-                    return <TasteChips key={key} data={p.output} />;
                   case "tool-findDestinations":
-                    return <Destinations key={key} data={p.output} onPick={send} />;
+                    return (
+                      <div key={key} className="space-y-4">
+                        <TasteChips items={p.output.taste} />
+                        {p.output.pricing && <Trips data={p.output.pricing} onPick={send} />}
+                        <Destinations data={p.output} onPick={send} />
+                      </div>
+                    );
                   case "tool-priceTrips":
                     return <Trips key={key} data={p.output} onPick={send} />;
                   case "tool-planCity":
