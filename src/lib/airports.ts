@@ -40,6 +40,11 @@ export function airportsNear(lat: number, lon: number): Airport[] {
   return one ? [one] : [];
 }
 
+export function airportCoords(code: string): { lat: number; lon: number } | null {
+  const r = rows.find((x) => x[0] === code.toUpperCase());
+  return r ? { lat: r[4], lon: r[5] } : null;
+}
+
 export function airportByCode(code: string): Airport | null {
   const r = rows.find((x) => x[0] === code.toUpperCase());
   return r ? { iata: r[0], name: r[1], city: r[2], country: r[3], km: 0 } : null;

@@ -40,7 +40,7 @@ export type Destination = {
   image?: string;
 };
 
-function km(a: { lat: number; lon: number }, b: { lat: number; lon: number }) {
+export function kmBetween(a: { lat: number; lon: number }, b: { lat: number; lon: number }) {
   const r = Math.PI / 180;
   const h = Math.sin(((b.lat - a.lat) * r) / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(((b.lon - a.lon) * r) / 2) ** 2;
   return 12742 * Math.asin(Math.sqrt(h));
@@ -49,7 +49,7 @@ function km(a: { lat: number; lon: number }, b: { lat: number; lon: number }) {
 /** Qloo often returns neighborhoods of one city (Santa Monica, Malibu...). Keep only the best-ranked within 60 km. */
 function spread<T extends { lat: number; lon: number }>(list: T[], minKm = 60) {
   const kept: T[] = [];
-  for (const d of list) if (!kept.some((k) => km(k, d) < minKm)) kept.push(d);
+  for (const d of list) if (!kept.some((k) => kmBetween(k, d) < minKm)) kept.push(d);
   return kept;
 }
 
@@ -73,11 +73,12 @@ function toDestination(e: QlooEntity, region: string, names: Map<string, string>
 
 type Resolved = { query: string; id: string; name: string; kind: string; image?: string; blurb?: string };
 
-async function resolveOne(name: string, kind?: string): Promise<Resolved | null> {
+async function resolveOne(name: string, kind?: string, tryInterest = true): Promise<Resolved | null> {
   if (kind === "interest") {
     const tags = await searchTags(name).catch(() => []);
     const t = [...tags].sort((a, b) => tagRank(a.type) - tagRank(b.type))[0];
-    return t ? { query: name, id: t.id, name: t.name, kind: "interest" } : null;
+    // The model sometimes calls a show or artist an "interest"; fall back to an entity search.
+    return t ? { query: name, id: t.id, name: t.name, kind: "interest" } : resolveOne(name, undefined, false);
   }
   // The model's guess at the kind can be wrong ("Wes Anderson" as a movie), so also search
   // untyped and prefer an exact name match.
@@ -98,7 +99,7 @@ async function resolveOne(name: string, kind?: string): Promise<Resolved | null>
     };
   }
   // Not an entity at all? Try it as an interest.
-  return kind ? null : resolveOne(name, "interest");
+  return tryInterest ? resolveOne(name, "interest") : null;
 }
 
 export async function resolveTaste(items: { name: string; kind?: string }[]) {

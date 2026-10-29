@@ -2,7 +2,8 @@ import { groq } from "@ai-sdk/groq";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { ToolLoopAgent, tool, type InferAgentUIMessage } from "ai";
 import { z } from "zod";
-import { blendGroup, CATEGORIES, ENTITY_KINDS, findDestinations, planCity, REGIONS, resolveTaste, type Category, type Region } from "@/lib/taste";
+import { blendGroup, CATEGORIES, ENTITY_KINDS, findDestinations, kmBetween, planCity, REGIONS, resolveTaste, type Category, type Region } from "@/lib/taste";
+import { airportCoords } from "@/lib/airports";
 import { placeImage } from "@/lib/images";
 import { priceDestinations } from "@/lib/trips";
 
@@ -61,7 +62,10 @@ const tools = {
     execute: async ({ favorites, regions, count, trip }) => {
       const { resolved, taste } = await toTaste(favorites);
       if (!taste.length) return { taste: resolved, destinations: [], pricing: null };
-      const destinations = await findDestinations(taste, regions?.length ? regions : allRegions, count);
+      const found = await findDestinations(taste, regions?.length ? regions : allRegions, count + 2);
+      // You can't fly to Brooklyn from New York: drop places within 150 km of home.
+      const home = trip ? airportCoords(trip.origin) : null;
+      const destinations = found.filter((d) => !home || kmBetween(home, d) > 150).slice(0, count);
       const pricing = trip ? await priceDestinations(trip, destinations) : null;
       return { taste: resolved, destinations, pricing };
     },
