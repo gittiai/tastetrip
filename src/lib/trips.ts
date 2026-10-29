@@ -1,10 +1,12 @@
 import { airportByCode, airportsNear } from "./airports";
 import { cheapestFare, futureDate } from "./flights";
+import { withImages } from "./images";
 
 export type PriceQuery = { origin: string; departDate: string; returnDate?: string; currency: string };
 
 /** Live cheapest fare to each destination's best airport, ranked by taste-per-price. */
-export async function priceDestinations<T extends { name: string; lat: number; lon: number; match: number }>(q: PriceQuery, destinations: T[]) {
+export async function priceDestinations<T extends { name: string; lat: number; lon: number; match: number; image?: string }>(q: PriceQuery, list: T[]) {
+  const destinations = await withImages(list);
   const origin = q.origin.toUpperCase();
   const currency = q.currency.toUpperCase();
   const departDate = futureDate(q.departDate) ?? q.departDate;

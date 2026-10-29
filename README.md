@@ -32,6 +32,8 @@ Without Qloo this is a generic chatbot that suggests the same famous cities to e
 - Qloo Taste AI hackathon API
 - SerpAPI Google Flights for live fares
 - OurAirports (public domain) for destination → airport mapping
+- Wikipedia lead images for destination photos, checked against Qloo's coordinates so "Portland" shows Maine, not Oregon. Venue photos come from Qloo.
+- Hero painting: Albert Bierstadt, *Among the Sierra Nevada, California* (1868), public domain via Wikimedia Commons
 
 ## Run locally
 

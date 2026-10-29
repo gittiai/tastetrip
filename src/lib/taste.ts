@@ -1,3 +1,4 @@
+import { withImages } from "./images";
 import { drivers, image, insights, search, searchTags, signals, type QlooEntity } from "./qloo";
 
 export type TasteItem = { id: string; name: string };
@@ -36,6 +37,7 @@ export type Destination = {
   popularity: number;
   because: { name: string; share: number }[];
   vibes: string[];
+  image?: string;
 };
 
 function km(a: { lat: number; lon: number }, b: { lat: number; lon: number }) {
@@ -126,13 +128,14 @@ export async function findDestinations(taste: TasteItem[], regions: Region[], co
   );
   const merged = spread(perRegion.flat().sort((a, b) => b.match - a.match));
   const perCountry = new Map<string, number>();
-  return merged
+  const picked = merged
     .filter((d) => {
       const n = perCountry.get(d.country ?? d.name) ?? 0;
       perCountry.set(d.country ?? d.name, n + 1);
       return n < 2;
     })
     .slice(0, count);
+  return withImages(picked);
 }
 
 // Category tags for venue picks inside a destination.

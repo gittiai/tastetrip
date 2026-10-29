@@ -3,6 +3,7 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { ToolLoopAgent, tool, type InferAgentUIMessage } from "ai";
 import { z } from "zod";
 import { blendGroup, CATEGORIES, ENTITY_KINDS, findDestinations, planCity, REGIONS, resolveTaste, type Category, type Region } from "@/lib/taste";
+import { placeImage } from "@/lib/images";
 import { priceDestinations } from "@/lib/trips";
 
 // Tools take favorites by name and resolve them server-side (cached), so the model never
@@ -99,12 +100,12 @@ const tools = {
         .default(["eat", "coffee", "drink", "music", "see", "stay"]),
     }),
     execute: async ({ destination, favorites, categories }) => {
-      const { taste } = await toTaste(favorites);
-      return { destination: destination.name, sections: taste.length ? await planCity(destination, taste, categories, 10) : [] };
+      const [{ taste }, image] = await Promise.all([toTaste(favorites), placeImage(destination).catch(() => undefined)]);
+      return { destination: destination.name, image, sections: taste.length ? await planCity(destination, taste, categories, 10) : [] };
     },
     toModelOutput: ({ output }) =>
       json({
-        note: "These venues are already shown to the user as cards. Do not list them; highlight one or two at most.",
+        note: "The user already sees every venue. Never list them or mention cards or UI; just recommend one or two by name, in your own words.",
         venues: output.sections.map((s) => ({ [s.label]: s.places.map((p) => `${p.name} (${p.match})`) })),
       }),
   }),
