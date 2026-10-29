@@ -2,6 +2,7 @@
 
 import { useChat } from "@ai-sdk/react";
 import { useEffect, useRef, useState } from "react";
+import Markdown from "react-markdown";
 import type { TasteTripMessage } from "@/agent/tastetrip";
 import { CityPlan, Destinations, Group, TasteChips, Thinking, Trips } from "@/components/cards";
 
@@ -25,7 +26,9 @@ export default function Home() {
   const busy = status === "submitted" || status === "streaming";
   const bottom = useRef<HTMLDivElement>(null);
 
-  useEffect(() => bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" }), [messages, status]);
+  useEffect(() => {
+    bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages, status]);
 
   const send = (text: string) => {
     if (!text.trim() || busy) return;
@@ -73,7 +76,12 @@ export default function Home() {
             <div key={m.id} className="space-y-4">
               {m.parts.map((p, i) => {
                 const key = `${m.id}-${i}`;
-                if (p.type === "text") return p.text.trim() ? <p key={key} className="leading-relaxed whitespace-pre-wrap">{p.text}</p> : null;
+                if (p.type === "text")
+                  return p.text.trim() ? (
+                    <div key={key} className="space-y-3 leading-relaxed [&_strong]:font-semibold [&_ul]:list-disc [&_ul]:pl-5">
+                      <Markdown>{p.text}</Markdown>
+                    </div>
+                  ) : null;
                 if (!p.type.startsWith("tool-")) return null;
                 if (!("state" in p)) return null;
                 if (p.state === "output-error") return <p key={key} className="text-sm text-accent">Something went wrong: {p.errorText}</p>;

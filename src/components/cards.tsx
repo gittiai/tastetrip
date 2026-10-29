@@ -134,7 +134,7 @@ export function Trips({ data, onPick }: { data: Output<"priceTrips">; onPick: (q
           const f = t.fare;
           return (
             <li key={t.name} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
-              <div className="min-w-0 flex-1">
+              <div className="w-full min-w-0 sm:w-auto sm:flex-1">
                 <div className="flex items-center gap-2">
                   <span className="font-medium">{t.name}</span>
                   {t === best && <span className="rounded-full bg-good-soft px-2 py-0.5 text-[11px] font-medium text-good">Best value</span>}
@@ -151,7 +151,7 @@ export function Trips({ data, onPick }: { data: Output<"priceTrips">; onPick: (q
                 <div className="font-display text-lg font-semibold text-accent">{t.match}</div>
                 <div className="text-[10px] uppercase tracking-wider text-muted">match</div>
               </div>
-              <div className="w-32 text-right">
+              <div className="ml-auto w-32 text-right sm:ml-0">
                 {f?.status === "ok" && f.price ? (
                   <>
                     <div className="font-display text-lg font-semibold">{money(f.price, f.currency)}</div>

@@ -27,6 +27,19 @@ export function nearestAirport(lat: number, lon: number): Airport | null {
   return large && large.km <= 200 ? large : any;
 }
 
+/** Every airport worth searching for a city: all with scheduled service within 80 km (large first, max 3), else the nearest one. */
+export function airportsNear(lat: number, lon: number): Airport[] {
+  const near = rows
+    .map(([iata, name, city, country, la, lo, isLarge]) => ({ iata, name, city, country, km: Math.round(km(lat, lon, la, lo)), isLarge }))
+    .filter((a) => a.km <= 80)
+    .sort((a, b) => b.isLarge - a.isLarge || a.km - b.km)
+    .slice(0, 3)
+    .map(({ iata, name, city, country, km }) => ({ iata, name, city, country, km }));
+  if (near.length) return near;
+  const one = nearestAirport(lat, lon);
+  return one ? [one] : [];
+}
+
 export function airportByCode(code: string): Airport | null {
   const r = rows.find((x) => x[0] === code.toUpperCase());
   return r ? { iata: r[0], name: r[1], city: r[2], country: r[3], km: 0 } : null;

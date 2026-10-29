@@ -28,7 +28,7 @@ export type QlooEntity = {
   tags?: QlooTag[];
   query?: {
     affinity?: number;
-    explainability?: { "signal.interests.entities"?: { entity_id: string; score: number }[] };
+    explainability?: Record<string, { entity_id?: string; tag_id?: string; id?: string; score: number }[]>;
   };
 };
 
@@ -41,19 +41,50 @@ async function get<T>(path: string, params: Record<string, string | number | boo
   for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== "") qs.set(k, String(v));
   const url = `${BASE}${path}?${qs}`;
   if (!cache.has(url)) {
-    const p = fetch(url, { headers: { "X-Api-Key": key } }).then(async (r) => {
-      if (!r.ok) throw new Error(`Qloo ${path} ${r.status}: ${(await r.text()).slice(0, 200)}`);
-      return r.json();
+    const p = fetchWithRetry(url, key);
+    p.catch((e) => {
+      console.error("qloo_request_failed", path, (e as Error).message);
+      cache.delete(url);
     });
-    p.catch(() => cache.delete(url));
     cache.set(url, p);
   }
   return cache.get(url) as Promise<T>;
 }
 
+// Retry rate limits and server errors; a silent failure would look like "not found" to the user.
+async function fetchWithRetry(url: string, key: string, attempts = 3): Promise<unknown> {
+  for (let i = 0; ; i++) {
+    try {
+      const r = await fetch(url, { headers: { "X-Api-Key": key } });
+      if (r.ok) return r.json();
+      if (i + 1 >= attempts || (r.status !== 429 && r.status < 500)) {
+        throw new Error(`Qloo ${r.status}: ${(await r.text()).slice(0, 200)}`);
+      }
+    } catch (e) {
+      if (i + 1 >= attempts || (e as Error).message.startsWith("Qloo ")) throw e;
+    }
+    await new Promise((res) => setTimeout(res, 400 * 2 ** i));
+  }
+}
+
 export async function search(query: string, type?: string, take = 3): Promise<QlooEntity[]> {
   const d = await get<{ results?: QlooEntity[] }>("/search", { query, types: type, take });
   return d.results ?? [];
+}
+
+export type QlooTagHit = { id: string; name: string; type: string };
+
+export async function searchTags(query: string, take = 6): Promise<QlooTagHit[]> {
+  const d = await get<{ results?: { tags?: QlooTagHit[] } }>("/v2/tags", { "filter.query": query, take });
+  return d.results?.tags ?? [];
+}
+
+/** Favorites become Qloo signals: entities (artists, films...) and tags (interests like "natural wine"). */
+export function signals(ids: string[]) {
+  return {
+    "signal.interests.entities": ids.filter((id) => !id.startsWith("urn:tag:")).join(","),
+    "signal.interests.tags": ids.filter((id) => id.startsWith("urn:tag:")).join(","),
+  };
 }
 
 export async function insights(params: Record<string, string | number | boolean | undefined>): Promise<QlooEntity[]> {
@@ -67,9 +98,10 @@ export function image(e: QlooEntity): string | undefined {
 
 /** Which of the user's favorites drove this match, as {name, share} pairs. */
 export function drivers(e: QlooEntity, names: Map<string, string>) {
-  const sig = e.query?.explainability?.["signal.interests.entities"] ?? [];
+  const ex = e.query?.explainability ?? {};
+  const sig = [...(ex["signal.interests.entities"] ?? []), ...(ex["signal.interests.tags"] ?? [])];
   const total = sig.reduce((s, x) => s + x.score, 0) || 1;
   return sig
-    .map((x) => ({ name: names.get(x.entity_id) ?? "your taste", share: Math.round((x.score / total) * 100) }))
+    .map((x) => ({ name: names.get(x.entity_id ?? x.tag_id ?? x.id ?? "") ?? "your taste", share: Math.round((x.score / total) * 100) }))
     .sort((a, b) => b.share - a.share);
 }

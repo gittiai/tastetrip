@@ -1,8 +1,16 @@
-import { drivers, image, insights, search, type QlooEntity } from "./qloo";
+import { drivers, image, insights, search, searchTags, signals, type QlooEntity } from "./qloo";
 
 export type TasteItem = { id: string; name: string };
 
-export const ENTITY_KINDS = ["artist", "movie", "tv_show", "book", "place", "brand", "podcast", "video_game", "person"] as const;
+// "interest" covers things that aren't a single entity: foods, drinks, genres, hobbies, vibes.
+export const ENTITY_KINDS = ["artist", "movie", "tv_show", "book", "place", "brand", "podcast", "video_game", "person", "interest"] as const;
+
+// For an interest, prefer tags that describe taste over listing collections (e.g. Resy lists).
+const TAG_PREFERENCE = [/cuisine/, /genre/, /specialty_dish/, /interests/, /keyword/];
+const tagRank = (type: string) => {
+  const i = TAG_PREFERENCE.findIndex((r) => r.test(type));
+  return i === -1 ? TAG_PREFERENCE.length : i;
+};
 
 // Qloo's destination results cluster around the user's "home" culture, so we query each
 // world region separately and merge. Polygons are rough lon/lat boxes.
@@ -61,33 +69,52 @@ function toDestination(e: QlooEntity, region: string, names: Map<string, string>
   };
 }
 
+type Resolved = { query: string; id: string; name: string; kind: string; image?: string; blurb?: string };
+
+async function resolveOne(name: string, kind?: string): Promise<Resolved | null> {
+  if (kind === "interest") {
+    const tags = await searchTags(name).catch(() => []);
+    const t = [...tags].sort((a, b) => tagRank(a.type) - tagRank(b.type))[0];
+    return t ? { query: name, id: t.id, name: t.name, kind: "interest" } : null;
+  }
+  // The model's guess at the kind can be wrong ("Wes Anderson" as a movie), so also search
+  // untyped and prefer an exact name match.
+  const [typed, any] = await Promise.all([
+    kind ? search(name, `urn:entity:${kind}`, 3).catch(() => []) : Promise.resolve([]),
+    search(name, undefined, 3).catch(() => []),
+  ]);
+  const exact = (e: QlooEntity) => e.name.toLowerCase() === name.toLowerCase();
+  const e = typed.find(exact) ?? any.find(exact) ?? typed[0] ?? any[0];
+  if (e) {
+    return {
+      query: name,
+      id: e.entity_id,
+      name: e.name,
+      kind: (e.types?.[0] ?? "").replace("urn:entity:", ""),
+      image: image(e),
+      blurb: e.properties?.short_description,
+    };
+  }
+  // Not an entity at all? Try it as an interest.
+  return kind ? null : resolveOne(name, "interest");
+}
+
 export async function resolveTaste(items: { name: string; kind?: string }[]) {
   return Promise.all(
-    items.map(async ({ name, kind }) => {
-      const hits = await search(name, kind ? `urn:entity:${kind}` : undefined, 1).catch(() => []);
-      const e = hits[0];
-      return e
-        ? {
-            query: name,
-            id: e.entity_id,
-            name: e.name,
-            kind: (e.types?.[0] ?? "").replace("urn:entity:", ""),
-            image: image(e),
-            blurb: e.properties?.short_description,
-          }
-        : { query: name, id: null as string | null, name };
-    }),
+    items.map(async ({ name, kind }): Promise<Omit<Resolved, "id" | "kind"> & { id: string | null; kind?: string }> =>
+      (await resolveOne(name, kind)) ?? { query: name, id: null, name },
+    ),
   );
 }
 
 export async function findDestinations(taste: TasteItem[], regions: Region[], count: number) {
   const names = new Map(taste.map((t) => [t.id, t.name]));
-  const signal = taste.map((t) => t.id).join(",");
+  const signal = signals(taste.map((t) => t.id));
   const perRegion = await Promise.all(
     regions.map(async (region) => {
       const ents = await insights({
         "filter.type": "urn:entity:destination",
-        "signal.interests.entities": signal,
+        ...signal,
         "filter.location": REGIONS[region],
         "filter.popularity.min": 0.6,
         "feature.explainability": true,
@@ -123,7 +150,7 @@ export async function planCity(dest: { name: string; lat: number; lon: number },
   const names = new Map(taste.map((t) => [t.id, t.name]));
   const base = {
     "filter.type": "urn:entity:place",
-    "signal.interests.entities": taste.map((t) => t.id).join(","),
+    ...signals(taste.map((t) => t.id)),
     "filter.location": `POINT(${dest.lon} ${dest.lat})`,
     "filter.location.radius": radiusKm * 1000,
     "feature.explainability": true,
@@ -177,7 +204,7 @@ export async function blendGroup(people: { name: string; taste: TasteItem[] }[],
     people.map(async (p) => {
       const ents = await insights({
         "filter.type": "urn:entity:destination",
-        "signal.interests.entities": p.taste.map((t) => t.id).join(","),
+        ...signals(p.taste.map((t) => t.id)),
         "filter.results.entities": ids,
         take: candidates.length,
       }).catch(() => []);

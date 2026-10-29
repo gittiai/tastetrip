@@ -10,6 +10,7 @@ export type Fare = {
   airline?: string;
   stops?: number;
   durationMin?: number;
+  arrivalAirport?: string; // which of the searched airports the cheapest itinerary lands at
   link: string;
   error?: string;
 };
@@ -17,7 +18,7 @@ export type Fare = {
 type SerpFlight = {
   price?: number;
   total_duration?: number;
-  flights?: { airline?: string }[];
+  flights?: { airline?: string; arrival_airport?: { id?: string } }[];
   layovers?: unknown[];
 };
 
@@ -28,6 +29,14 @@ export function googleFlightsLink(from: string, to: string, depart: string, ret?
   return `https://www.google.com/travel/flights?q=${encodeURIComponent(q)}`;
 }
 
+/** Models sometimes pick a month that has already passed ("March" -> this year's March). Roll it forward a year. */
+export function futureDate(date: string | undefined, today = new Date().toISOString().slice(0, 10)) {
+  if (!date || date > today) return date;
+  const next = `${Number(date.slice(0, 4)) + 1}${date.slice(4)}`;
+  return next > today ? next : undefined;
+}
+
+/** `to` may be several comma-separated airports; Google Flights returns the cheapest across them. */
 export function cheapestFare(from: string, to: string, depart: string, ret: string | undefined, currency: string): Promise<Fare> {
   const k = [from, to, depart, ret, currency].join("|");
   if (!cache.has(k)) {
@@ -70,6 +79,7 @@ async function fetchFare(from: string, to: string, depart: string, ret: string |
       airline: best.flights?.[0]?.airline,
       stops: best.layovers?.length ?? 0,
       durationMin: best.total_duration,
+      arrivalAirport: best.flights?.at(-1)?.arrival_airport?.id,
       link: d.search_metadata?.google_flights_url ?? link,
     };
   } catch (e) {
