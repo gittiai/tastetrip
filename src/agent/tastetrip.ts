@@ -26,6 +26,7 @@ const trip = z.object({
   departDate: z.string().describe("YYYY-MM-DD"),
   returnDate: z.string().optional().describe("YYYY-MM-DD; omit for one-way"),
   currency: z.string().length(3).describe("Currency of the user's home country, e.g. INR, USD, GBP"),
+  adults: z.number().int().min(1).max(9).default(1).describe("Number of travelers; prices are the total for all of them"),
 });
 
 async function toTaste(items: z.infer<typeof favorite>[]) {
@@ -33,13 +34,17 @@ async function toTaste(items: z.infer<typeof favorite>[]) {
   return { resolved, taste: resolved.filter((r) => r.id).map((r) => ({ id: r.id!, name: r.name })) };
 }
 
+// One full label ("Naples, Florida, US") so the model can't pair a name with the wrong region.
+const label = (d: { name: string; area?: string; country?: string }) => [d.name, d.area, d.country].filter(Boolean).join(", ");
+
 const json = (value: unknown) => ({ type: "json" as const, value: value as never });
 
 function fareSummary(p: Awaited<ReturnType<typeof priceDestinations>>) {
   return {
-    pricedFor: `${p.origin.iata} ${p.departDate}${p.returnDate ? ` to ${p.returnDate}` : " one-way"}, ${p.currency}`,
+    pricedFor: `${p.origin.iata} ${p.departDate}${p.returnDate ? ` to ${p.returnDate}` : " one-way"}, ${p.currency}, total for ${p.adults} traveler${p.adults > 1 ? "s" : ""}`,
     trips: p.trips.map((t) => ({
     name: t.name,
+    place: label(t),
     match: t.match,
     airport: t.airport?.iata,
     price: t.fare?.price ? `${t.fare.price} ${t.fare.currency}` : (t.fare?.status ?? "n/a"),
@@ -74,8 +79,7 @@ const tools = {
         notFound: output.taste.filter((t) => !t.id).map((t) => t.query),
         destinations: output.destinations.map((d) => ({
           name: d.name,
-          area: d.area,
-          country: d.country,
+          place: label(d),
           lat: d.lat,
           lon: d.lon,
           match: d.match,
@@ -104,8 +108,10 @@ const tools = {
         .default(["eat", "coffee", "drink", "music", "see", "stay"]),
     }),
     execute: async ({ destination, favorites, categories }) => {
-      const [{ taste }, image] = await Promise.all([toTaste(favorites), placeImage(destination).catch(() => undefined)]);
-      return { destination: destination.name, image, sections: taste.length ? await planCity(destination, taste, categories, 10) : [] };
+      // The model may pass the full label ("Salerno, Campania, IT"); the city is the first part.
+      const city = { ...destination, name: destination.name.split(",")[0].trim() };
+      const [{ taste }, image] = await Promise.all([toTaste(favorites), placeImage(city).catch(() => undefined)]);
+      return { destination: city.name, image, sections: taste.length ? await planCity(city, taste, categories, 10) : [] };
     },
     toModelOutput: ({ output }) =>
       json({
@@ -151,9 +157,10 @@ function instructions() {
 How you work:
 - Pull the user's favorites (music, films, shows, books, food, places, brands) from the message and call findDestinations once. If they gave fewer than 2 favorites, ask for a couple more first.
 - If they said where they fly from, pass trip with their airport's IATA code and their home currency (US: USD).
+- Travelers: "2 people", "me and my partner" etc. set adults; prices are totals for everyone, so say so.
 - Dates: always round trip with a returnDate unless they say one-way. If they name a month, depart in that month (its next occurrence after today, which may be next year). "Long weekend" = Fri to Mon; "a week" = 7 nights. No timing given: a long weekend about 5 weeks from today, and say so.
 - Regions: omit them (search worldwide) unless the trip is 4 days or fewer; only then limit to regions near home (from the US: north_america, latin_america; from Europe: europe; from India: asia, africa_middle_east).
-- Name places exactly as the tool gives them, with their area/country (e.g. "Portland, Maine"). Never guess which city of the same name it is.
+- Refer to places by their "place" label from the tool (e.g. "Naples, Florida, US" is in Florida, not Italy). Never guess which city of the same name it is.
 - findDestinations with trip already returns live fares; never call priceTrips after it for the same trip.
 - No home airport given: show destinations, then ask where they fly from and when. Later, call priceTrips with the destinations you found.
 - Several people with their own favorites: call blendGroup instead.

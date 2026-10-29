@@ -2,7 +2,7 @@ import { airportByCode, airportsNear } from "./airports";
 import { cheapestFare, futureDate } from "./flights";
 import { withImages } from "./images";
 
-export type PriceQuery = { origin: string; departDate: string; returnDate?: string; currency: string };
+export type PriceQuery = { origin: string; departDate: string; returnDate?: string; currency: string; adults?: number };
 
 /** Live cheapest fare to each destination's best airport, ranked by taste-per-price. */
 export async function priceDestinations<T extends { name: string; lat: number; lon: number; match: number; image?: string }>(q: PriceQuery, list: T[]) {
@@ -15,7 +15,7 @@ export async function priceDestinations<T extends { name: string; lat: number; l
   const rows = await Promise.all(
     destinations.map(async (d) => {
       const airports = airportsNear(d.lat, d.lon).filter((a) => a.iata !== origin);
-      const fare = airports.length ? await cheapestFare(origin, airports.map((a) => a.iata).join(","), departDate, returnDate, currency) : null;
+      const fare = airports.length ? await cheapestFare(origin, airports.map((a) => a.iata).join(","), departDate, returnDate, currency, q.adults ?? 1) : null;
       const airport = airports.find((a) => a.iata === fare?.arrivalAirport) ?? airports[0] ?? null;
       return { ...d, airport, fare };
     }),
@@ -26,5 +26,5 @@ export async function priceDestinations<T extends { name: string; lat: number; l
   const trips = rows
     .map((r) => ({ ...r, value: r.fare?.price ? Math.round(r.match / Math.sqrt(r.fare.price / cheapest)) : null }))
     .sort((a, b) => (b.value ?? -1) - (a.value ?? -1) || b.match - a.match);
-  return { origin: airportByCode(origin) ?? { iata: origin }, departDate, returnDate, currency, trips };
+  return { origin: airportByCode(origin) ?? { iata: origin }, departDate, returnDate, currency, adults: q.adults ?? 1, trips };
 }

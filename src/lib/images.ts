@@ -10,6 +10,7 @@ type Summary = {
 };
 
 const cache = new Map<string, Promise<string | undefined>>();
+const countryName = new Intl.DisplayNames(["en"], { type: "region" });
 
 function km(lat1: number, lon1: number, lat2: number, lon2: number) {
   const r = Math.PI / 180;
@@ -38,7 +39,10 @@ export function placeImage(p: { name: string; area?: string; country?: string; l
     cache.set(
       key,
       (async () => {
-        const titles = [...new Set([p.area ? `${p.name}, ${p.area}` : null, p.name].filter(Boolean) as string[])];
+        const country = p.country ? countryName.of(p.country) : undefined;
+        const titles = [
+          ...new Set([p.area ? `${p.name}, ${p.area}` : null, country ? `${p.name}, ${country}` : null, p.name].filter(Boolean) as string[]),
+        ];
         for (const t of titles) {
           const s = await summary(t);
           if (!s || s.type === "disambiguation" || !s.thumbnail) continue;

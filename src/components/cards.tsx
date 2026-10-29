@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { TasteTripMessage } from "@/agent/tastetrip";
 import { Icon } from "./icons";
 
@@ -18,8 +19,9 @@ const PRICE = ["", "$", "$$", "$$$", "$$$$"];
 /* eslint-disable @next/next/no-img-element -- remote photos from Qloo and Wikimedia, any host */
 
 function Photo({ src, className = "" }: { src?: string; className?: string }) {
-  return src ? (
-    <img src={src} alt="" loading="lazy" className={`h-full w-full object-cover ${className}`} />
+  const [broken, setBroken] = useState(false);
+  return src && !broken ? (
+    <img src={src} alt="" loading="lazy" onError={() => setBroken(true)} className={`h-full w-full object-cover ${className}`} />
   ) : (
     <div className={`h-full w-full bg-gradient-to-br from-accent to-accent-deep ${className}`} />
   );
@@ -253,10 +255,13 @@ export function Trips({ data, onPick }: { data: Pricing; onPick: (q: string) => 
           <div className="label">
             Live fares · {data.origin.iata} · {data.departDate}
             {data.returnDate ? ` → ${data.returnDate}` : " · one way"}
+            {data.adults > 1 ? ` · ${data.adults} travelers` : ""}
           </div>
           <h3 className="mt-1 font-display text-3xl text-ink">The cheapest way there, from {city}</h3>
         </div>
-        <span className="text-xs text-muted">Ranked by taste per dollar · Google Flights</span>
+        <span className="text-xs text-muted">
+          {data.adults > 1 ? `Total for ${data.adults} · ` : ""}Ranked by taste per dollar · Google Flights
+        </span>
       </div>
       <ul className="divide-y divide-line">
         {data.trips.map((t) => (

@@ -1,6 +1,7 @@
 // Live cheapest fares from Google Flights via SerpAPI. Without a key we never guess a price;
 // we return a Google Flights link instead.
 
+// Prices are the total for every traveler, as Google Flights shows them.
 export type Fare = {
   status: "ok" | "no_key" | "no_flights" | "error";
   price?: number;
@@ -37,17 +38,17 @@ export function futureDate(date: string | undefined, today = new Date().toISOStr
 }
 
 /** `to` may be several comma-separated airports; Google Flights returns the cheapest across them. */
-export function cheapestFare(from: string, to: string, depart: string, ret: string | undefined, currency: string): Promise<Fare> {
-  const k = [from, to, depart, ret, currency].join("|");
+export function cheapestFare(from: string, to: string, depart: string, ret: string | undefined, currency: string, adults = 1): Promise<Fare> {
+  const k = [from, to, depart, ret, currency, adults].join("|");
   if (!cache.has(k)) {
-    const p = fetchFare(from, to, depart, ret, currency);
+    const p = fetchFare(from, to, depart, ret, currency, adults);
     p.then((f) => f.status === "error" && cache.delete(k));
     cache.set(k, p);
   }
   return cache.get(k)!;
 }
 
-async function fetchFare(from: string, to: string, depart: string, ret: string | undefined, currency: string): Promise<Fare> {
+async function fetchFare(from: string, to: string, depart: string, ret: string | undefined, currency: string, adults: number): Promise<Fare> {
   const link = googleFlightsLink(from, to, depart, ret);
   const key = process.env.SERPAPI_KEY;
   if (!key) return { status: "no_key", currency, link };
@@ -58,6 +59,7 @@ async function fetchFare(from: string, to: string, depart: string, ret: string |
     outbound_date: depart,
     type: ret ? "1" : "2",
     currency,
+    adults: String(adults),
     hl: "en",
     api_key: key,
   });

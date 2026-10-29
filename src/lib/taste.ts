@@ -7,7 +7,7 @@ export type TasteItem = { id: string; name: string };
 export const ENTITY_KINDS = ["artist", "movie", "tv_show", "book", "place", "brand", "podcast", "video_game", "person", "interest"] as const;
 
 // For an interest, prefer tags that describe taste over listing collections (e.g. Resy lists).
-const TAG_PREFERENCE = [/cuisine/, /genre/, /specialty_dish/, /interests/, /keyword/];
+const TAG_PREFERENCE = [/destination/, /cuisine/, /genre/, /:view:/, /good_for/, /interests/, /keyword/, /specialty_dish/];
 const tagRank = (type: string) => {
   const i = TAG_PREFERENCE.findIndex((r) => r.test(type));
   return i === -1 ? TAG_PREFERENCE.length : i;
@@ -75,9 +75,16 @@ type Resolved = { query: string; id: string; name: string; kind: string; image?:
 
 async function resolveOne(name: string, kind?: string, tryInterest = true): Promise<Resolved | null> {
   if (kind === "interest") {
-    const tags = await searchTags(name).catch(() => []);
-    const t = [...tags].sort((a, b) => tagRank(a.type) - tagRank(b.type))[0];
-    // The model sometimes calls a show or artist an "interest"; fall back to an entity search.
+    // Qloo's tag search is literal ("sunsets" misses "Sunset View"), so search the singular too,
+    // keep tags that contain the interest, and prefer taste-like types over dishes and landmarks.
+    const norm = (x: string) => x.toLowerCase().replace(/(es|s)$/, "").trim();
+    const q = norm(name);
+    const found = (await Promise.all([...new Set([name, q])].map((x) => searchTags(x).catch(() => [])))).flat();
+    const relevant = found.filter((x) => norm(x.name).includes(q));
+    const pool = relevant.length ? relevant : found;
+    const t = [...pool].sort(
+      (a, b) => tagRank(a.type) - tagRank(b.type) || Number(norm(b.name) === q) - Number(norm(a.name) === q) || a.name.length - b.name.length,
+    )[0];
     return t ? { query: name, id: t.id, name: t.name, kind: "interest" } : resolveOne(name, undefined, false);
   }
   // The model's guess at the kind can be wrong ("Wes Anderson" as a movie), so also search
